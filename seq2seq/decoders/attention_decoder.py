@@ -74,11 +74,20 @@ class AttentionDecoder(RNNDecoder):
                name="attention_decoder"):
     super(AttentionDecoder, self).__init__(params, mode, name)
     self.vocab_size = vocab_size
+    self.compute_softmax = (mode != tf.contrib.learn.ModeKeys.TRAIN)
     self.attention_keys = attention_keys
     self.attention_values = attention_values
     self.attention_values_length = attention_values_length
     self.attention_fn = attention_fn
     self.reverse_scores_lengths = reverse_scores_lengths
+    with tf.variable_scope("logits"):
+        self.outproj_weights = tf.get_variable(name="Weights",
+                                               shape=[self.vocab_size, self.cell.output_size],
+                                               initializer=tf.random_uniform_initializer(minval=-0.001,
+                                                                                         maxval=0.001))
+        self.outproj_biases = tf.get_variable(name="biases",
+                                              shape=[self.vocab_size],
+                                              initializer=tf.zeros_initializer())
 
   @property
   def output_size(self):
@@ -131,12 +140,20 @@ class AttentionDecoder(RNNDecoder):
         activation_fn=tf.nn.tanh,
         scope="attention_mix")
 
-    # Softmax computation
-    logits = tf.contrib.layers.fully_connected(
-        inputs=softmax_input,
-        num_outputs=self.vocab_size,
-        activation_fn=None,
-        scope="logits")
+    if self.compute_softmax:
+        # Softmax computation
+
+            logits = tf.nn.xw_plus_b(x=softmax_input,
+                                     weights=tf.transpose(self.outproj_weights),
+                                     biases=self.outproj_biases)
+
+        #logits = tf.contrib.layers.fully_connected(
+        #    inputs=softmax_input,
+        #    num_outputs=self.vocab_size,
+        #    activation_fn=None,
+        #    scope="logits")
+    else:
+        logits = softmax_input
 
     return softmax_input, logits, att_scores, attention_context
 
@@ -173,8 +190,12 @@ class AttentionDecoder(RNNDecoder):
           seq_dim=1,
           batch_dim=0)
 
-    sample_ids = self.helper.sample(
-        time=time_, outputs=logits, state=cell_state)
+    #sample_ids = self.helper.sample(
+    #    time=time_, outputs=logits, state=cell_state)
+    #TODO: figure out proper way to ignore this
+    #this is random, to avoid help from "helper".
+    sample_ids = tf.zeros(shape=[1], dtype=tf.int32)
+
 
     outputs = AttentionDecoderOutput(
         logits=logits,

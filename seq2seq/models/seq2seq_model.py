@@ -46,6 +46,8 @@ class Seq2SeqModel(ModelBase):
     self.target_vocab_info = None
     if "vocab_target" in self.params and self.params["vocab_target"]:
       self.target_vocab_info = vocab.get_vocab_info(self.params["vocab_target"])
+    self.decoder_W = None
+    self.decoder_b = None
 
   @staticmethod
   def default_params():
@@ -279,10 +281,21 @@ class Seq2SeqModel(ModelBase):
     """
     #pylint: disable=R0201
     # Calculate loss per example-timestep of shape [B, T]
-    losses = seq2seq_losses.cross_entropy_sequence_loss(
-        logits=decoder_output.logits[:, :, :],
+
+    losses = seq2seq_losses.sampled_softmax_loss(
+        input=decoder_output.logits,
+        weights=self.decoder_W,
+        biases=self.decoder_b,
         targets=tf.transpose(labels["target_ids"][:, 1:], [1, 0]),
+        #TODO: Num sampled must be configured with params
+        num_sampled=512,
+        vocab_size=self.target_vocab_info.vocab_size,
         sequence_length=labels["target_len"] - 1)
+
+    #losses = seq2seq_losses.cross_entropy_sequence_loss(
+    #    logits=decoder_output.logits[:, :, :],
+    #    targets=tf.transpose(labels["target_ids"][:, 1:], [1, 0]),
+    #    sequence_length=labels["target_len"] - 1)
 
     # Calculate the average log perplexity
     loss = tf.reduce_sum(losses) / tf.to_float(
@@ -302,6 +315,8 @@ class Seq2SeqModel(ModelBase):
           decoder_output=decoder_output, features=features, labels=labels)
       loss = None
       train_op = None
+      graph_utils.add_dict_to_collection(predictions, "predictions")
+      return predictions, loss, train_op
     else:
       losses, loss = self.compute_loss(decoder_output, features, labels)
 
@@ -309,14 +324,16 @@ class Seq2SeqModel(ModelBase):
       if self.mode == tf.contrib.learn.ModeKeys.TRAIN:
         train_op = self._build_train_op(loss)
 
-      predictions = self._create_predictions(
-          decoder_output=decoder_output,
-          features=features,
-          labels=labels,
-          losses=losses)
+      return None, loss, train_op
+      #predictions = self._create_predictions(
+      #    decoder_output=decoder_output,
+      #    features=features,
+      #    labels=labels,
+      #    losses=losses)
 
     # We add "useful" tensors to the graph collection so that we
     # can easly find them in our hooks/monitors.
-    graph_utils.add_dict_to_collection(predictions, "predictions")
+    #graph_utils.add_dict_to_collection(predictions, "predictions")
 
-    return predictions, loss, train_op
+    #return predictions, loss, train_op
+

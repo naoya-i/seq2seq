@@ -113,6 +113,9 @@ class BasicSeq2Seq(Seq2SeqModel):
     decoder = self._create_decoder(encoder_output, features, labels)
     if self.use_beam_search:
       decoder = self._get_beam_search_decoder(decoder)
+    else:
+      self.decoder_W = decoder.outproj_weights
+      self.decoder_b = decoder.outproj_biases
 
     bridge = self._create_bridge(
         encoder_outputs=encoder_output,

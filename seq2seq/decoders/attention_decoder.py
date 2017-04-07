@@ -30,7 +30,7 @@ from seq2seq.contrib.seq2seq.helper import CustomHelper
 class AttentionDecoderOutput(
     namedtuple("DecoderOutput", [
         "logits", "predicted_ids", "cell_output", "attention_scores",
-        "attention_context"
+        "attention_context", "softmax_input"
     ])):
   """Augmented decoder output that also includes the attention scores.
   """
@@ -74,7 +74,8 @@ class AttentionDecoder(RNNDecoder):
                name="attention_decoder"):
     super(AttentionDecoder, self).__init__(params, mode, name)
     self.vocab_size = vocab_size
-    self.compute_softmax = (mode != tf.contrib.learn.ModeKeys.TRAIN)
+    #TODO: make this controllable via config
+    self.compute_softmax = True#(mode != tf.contrib.learn.ModeKeys.TRAIN)
     self.attention_keys = attention_keys
     self.attention_values = attention_values
     self.attention_values_length = attention_values_length
@@ -96,7 +97,8 @@ class AttentionDecoder(RNNDecoder):
         predicted_ids=tf.TensorShape([]),
         cell_output=self.cell.output_size,
         attention_scores=tf.shape(self.attention_values)[1:-1],
-        attention_context=self.attention_values.get_shape()[-1])
+        attention_context=self.attention_values.get_shape()[-1],
+        softmax_input=self.cell.output_size)
 
   @property
   def output_dtype(self):
@@ -105,7 +107,8 @@ class AttentionDecoder(RNNDecoder):
         predicted_ids=tf.int32,
         cell_output=tf.float32,
         attention_scores=tf.float32,
-        attention_context=tf.float32)
+        attention_context=tf.float32,
+        softmax_input=tf.float32)
 
   def initialize(self, name=None):
     finished, first_inputs = self.helper.initialize()
@@ -142,18 +145,12 @@ class AttentionDecoder(RNNDecoder):
 
     if self.compute_softmax:
         # Softmax computation
-
-            logits = tf.nn.xw_plus_b(x=softmax_input,
-                                     weights=tf.transpose(self.outproj_weights),
-                                     biases=self.outproj_biases)
-
-        #logits = tf.contrib.layers.fully_connected(
-        #    inputs=softmax_input,
-        #    num_outputs=self.vocab_size,
-        #    activation_fn=None,
-        #    scope="logits")
+        logits = tf.nn.xw_plus_b(x=softmax_input,
+                                 weights=tf.transpose(self.outproj_weights),
+                                 biases=self.outproj_biases)
     else:
-        logits = softmax_input
+        #TODO: this is a memory wasting hack
+        logits = tf.zeros(shape=[softmax_input.get_shape()[0].value, self.vocab_size])
 
     return softmax_input, logits, att_scores, attention_context
 
@@ -190,19 +187,28 @@ class AttentionDecoder(RNNDecoder):
           seq_dim=1,
           batch_dim=0)
 
-    #sample_ids = self.helper.sample(
-    #    time=time_, outputs=logits, state=cell_state)
-    #TODO: figure out proper way to ignore this
-    #this is random, to avoid help from "helper".
-    sample_ids = tf.zeros(shape=[1], dtype=tf.int32)
-
+    #TODO: this is still not the best way to do it
+    sample_ids = self.helper.sample(
+         time=time_, outputs=logits, state=cell_state)
+    #if self.compute_softmax:
+    #    sample_ids = self.helper.sample(
+    #        time=time_, outputs=logits, state=cell_state)
+    #    print(sample_ids)
+    #else:
+        #TODO: remove this unnecessary computation
+        #sample_ids = self.helper.sample(
+        #    time=time_, outputs=tf.zeros(shape=[cell_state.get_shape()[0], cell_state.get_shape()[1],
+                                                #self.vocab_size]), state=cell_state)
+        #sample_ids = tf.ones(shape=[cell_state.get_shape()[0], cell_state.get_shape()[1], 1], dtype=tf.float32)
 
     outputs = AttentionDecoderOutput(
         logits=logits,
         predicted_ids=sample_ids,
         cell_output=cell_output_new,
         attention_scores=attention_scores,
-        attention_context=attention_context)
+        attention_context=attention_context,
+        softmax_input=cell_output_new
+    )
 
     finished, next_inputs, next_state = self.helper.next_inputs(
         time=time_, outputs=outputs, state=cell_state, sample_ids=sample_ids)

@@ -71,7 +71,7 @@ class AttentionSeq2Seq(BasicSeq2Seq):
         reverse_scores_lengths = tf.tile(
             input=reverse_scores_lengths,
             multiples=[self.params["inference.beam_search.beam_width"]])
-
+    compute_full_softmax_in_decoder_during_training = not (self.loss_num_samples and self.loss_num_samples >0)
     return self.decoder_class(
         params=self.params["decoder.params"],
         mode=self.mode,
@@ -80,4 +80,5 @@ class AttentionSeq2Seq(BasicSeq2Seq):
         attention_values_length=encoder_output.attention_values_length,
         attention_keys=encoder_output.outputs,
         attention_fn=attention_layer,
-        reverse_scores_lengths=reverse_scores_lengths)
+        reverse_scores_lengths=reverse_scores_lengths,
+        do_full_softmax=compute_full_softmax_in_decoder_during_training)

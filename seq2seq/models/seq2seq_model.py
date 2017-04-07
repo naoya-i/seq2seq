@@ -46,6 +46,12 @@ class Seq2SeqModel(ModelBase):
     self.target_vocab_info = None
     if "vocab_target" in self.params and self.params["vocab_target"]:
       self.target_vocab_info = vocab.get_vocab_info(self.params["vocab_target"])
+
+    if "loss.num_samples" in self.params and self.params["loss_num_samples"]:
+      self.loss_num_samples = int(self.params["vocab_target"])
+    else:
+      self.loss_num_samples = None
+
     self.decoder_W = None
     self.decoder_b = None
 
@@ -65,6 +71,7 @@ class Seq2SeqModel(ModelBase):
         "optimizer.clip_embed_gradients": 0.1,
         "vocab_source": "",
         "vocab_target": "",
+        "loss_num_samples": 0,
     })
     return params
 
@@ -279,24 +286,25 @@ class Seq2SeqModel(ModelBase):
     Returns a tuple `(losses, loss)`, where `losses` are the per-batch
     losses and loss is a single scalar tensor to minimize.
     """
+    targets = tf.transpose(labels["target_ids"][:, 1:], [1, 0])
+    if self.loss_num_samples and self.loss_num_samples > 0 and self.decoder_W and self.decoder_b:
     #pylint: disable=R0201
     # Calculate loss per example-timestep of shape [B, T]
-
-    losses = seq2seq_losses.sampled_softmax_loss(
+      losses = seq2seq_losses.sampled_softmax_loss(
         input=decoder_output.softmax_input,
         weights=self.decoder_W,
         biases=self.decoder_b,
-        targets=tf.transpose(labels["target_ids"][:, 1:], [1, 0]),
-        #TODO: Num sampled must be configured with params
-        num_sampled=512,
+        targets=targets,
+        num_sampled=self.loss_num_samples,
         vocab_size=self.target_vocab_info.vocab_size,
         sequence_length=labels["target_len"] - 1)
 
-
-    #losses = seq2seq_losses.cross_entropy_sequence_loss(
-    #    logits=decoder_output.logits[:, :, :],
-    #    targets=tf.transpose(labels["target_ids"][:, 1:], [1, 0]),
-    #    sequence_length=labels["target_len"] - 1)
+      losses = tf.reshape(losses, shape=tf.shape(targets))
+    else: #full softmax
+      losses = seq2seq_losses.cross_entropy_sequence_loss(
+        logits=decoder_output.logits[:, :, :],
+        targets=tf.transpose(labels["target_ids"][:, 1:], [1, 0]),
+        sequence_length=labels["target_len"] - 1)
 
     # Calculate the average log perplexity
     loss = tf.reduce_sum(losses) / tf.to_float(

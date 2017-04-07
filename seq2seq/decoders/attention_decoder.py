@@ -71,11 +71,12 @@ class AttentionDecoder(RNNDecoder):
                attention_values_length,
                attention_fn,
                reverse_scores_lengths=None,
+               do_full_softmax=True,
                name="attention_decoder"):
     super(AttentionDecoder, self).__init__(params, mode, name)
     self.vocab_size = vocab_size
     #TODO: make this controllable via config
-    self.compute_softmax = True#(mode != tf.contrib.learn.ModeKeys.TRAIN)
+    self.compute_softmax = (mode != tf.contrib.learn.ModeKeys.TRAIN or do_full_softmax)
     self.attention_keys = attention_keys
     self.attention_values = attention_values
     self.attention_values_length = attention_values_length

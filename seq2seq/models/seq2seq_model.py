@@ -47,8 +47,8 @@ class Seq2SeqModel(ModelBase):
     if "vocab_target" in self.params and self.params["vocab_target"]:
       self.target_vocab_info = vocab.get_vocab_info(self.params["vocab_target"])
 
-    if "loss.num_samples" in self.params and self.params["loss_num_samples"]:
-      self.loss_num_samples = int(self.params["vocab_target"])
+    if "loss_num_samples" in self.params and self.params["loss_num_samples"]:
+      self.loss_num_samples = int(self.params["loss_num_samples"])
     else:
       self.loss_num_samples = None
 

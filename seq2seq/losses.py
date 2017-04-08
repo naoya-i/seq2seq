@@ -48,12 +48,12 @@ def cross_entropy_sequence_loss(logits, targets, sequence_length):
 def sampled_softmax_loss(input, weights, biases, targets, num_sampled, vocab_size, sequence_length):
     input = tf.reshape(input, [-1, weights.get_shape()[1].value])
     labels = tf.reshape(targets, [-1, 1])
-
-    losses = tf.nn.sampled_softmax_loss(weights=weights,
+    with tf.name_scope("sampled_softmax_loss"):
+      losses = tf.nn.sampled_softmax_loss(weights=weights,
                                         biases=biases,
                                         labels=labels,
                                         inputs=input,
                                         num_sampled=min(num_sampled, vocab_size-1),
                                         num_classes=vocab_size)
 
-    return losses
+      return losses

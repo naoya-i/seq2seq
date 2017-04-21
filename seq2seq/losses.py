@@ -56,4 +56,10 @@ def sampled_softmax_loss(input, weights, biases, targets, num_sampled, vocab_siz
                                         num_sampled=min(num_sampled, vocab_size-1),
                                         num_classes=vocab_size)
 
+      # Mask out the losses we don't care about
+      loss_mask = tf.sequence_mask(
+          tf.to_int32(sequence_length), tf.to_int32(tf.shape(targets)[0]))
+      #TODO looks like to many tensor shape manipulations
+      losses = losses * tf.reshape(tf.transpose(tf.to_float(loss_mask), [1, 0]), [-1])
+
       return losses

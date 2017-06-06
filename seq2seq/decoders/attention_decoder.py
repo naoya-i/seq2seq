@@ -24,7 +24,7 @@ from collections import namedtuple
 import tensorflow as tf
 from seq2seq.decoders.rnn_decoder import RNNDecoder
 
-from seq2seq.contrib.seq2seq.helper import CustomHelper
+from tensorflow.contrib.seq2seq import CustomHelper
 
 
 class AttentionDecoderOutput(

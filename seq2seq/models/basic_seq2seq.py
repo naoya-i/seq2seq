@@ -22,7 +22,7 @@ from __future__ import unicode_literals
 
 from pydoc import locate
 import tensorflow as tf
-from seq2seq.contrib.seq2seq import helper as tf_decode_helper
+from tensorflow.contrib.seq2seq.python.ops import helper as tf_decode_helper
 
 from seq2seq.models.seq2seq_model import Seq2SeqModel
 from seq2seq.graph_utils import templatemethod

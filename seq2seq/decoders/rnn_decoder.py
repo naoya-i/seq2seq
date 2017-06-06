@@ -29,7 +29,7 @@ from tensorflow.python.util import nest  # pylint: disable=E0611
 
 from seq2seq.graph_module import GraphModule
 from seq2seq.configurable import Configurable
-from seq2seq.contrib.seq2seq.decoder import Decoder, dynamic_decode
+from tensorflow.contrib.seq2seq import Decoder, dynamic_decode
 from seq2seq.encoders.rnn_encoder import _default_rnn_cell_params
 from seq2seq.encoders.rnn_encoder import _toggle_dropout
 from seq2seq.training import utils as training_utils
@@ -85,12 +85,12 @@ class RNNDecoder(Decoder, GraphModule, Configurable):
     self.initial_state = initial_state
     self.helper = helper
 
-  def finalize(self, outputs, final_state):
-    """Applies final transformation to the decoder output once decoding is
-    finished.
-    """
-    #pylint: disable=R0201
-    return (outputs, final_state)
+  #def finalize(self, outputs, final_state):
+  #  """Applies final transformation to the decoder output once decoding is
+  #  finished.
+  #  """
+  #  #pylint: disable=R0201
+  #  return (outputs, final_state)
 
   @staticmethod
   def default_params():
@@ -113,9 +113,11 @@ class RNNDecoder(Decoder, GraphModule, Configurable):
     if self.mode == tf.contrib.learn.ModeKeys.INFER:
       maximum_iterations = self.params["max_decode_length"]
 
-    outputs, final_state = dynamic_decode(
+    (final_outputs, final_state, final_sequence_lengths) = dynamic_decode(
+    #outputs, final_state = dynamic_decode(
         decoder=self,
         output_time_major=True,
         impute_finished=False,
         maximum_iterations=maximum_iterations)
-    return self.finalize(outputs, final_state)
+    return (final_outputs, final_state)
+    #return self.finalize(outputs, final_state)

@@ -24,7 +24,7 @@ import tensorflow as tf
 
 from seq2seq import graph_utils
 from seq2seq import losses as seq2seq_losses
-from seq2seq.contrib.seq2seq.decoder import _transpose_batch_time
+from tensorflow.contrib.seq2seq.python.ops.helper import _transpose_batch_time
 from seq2seq.data import vocab
 from seq2seq.graph_utils import templatemethod
 from seq2seq.decoders.beam_search_decoder import BeamSearchDecoder

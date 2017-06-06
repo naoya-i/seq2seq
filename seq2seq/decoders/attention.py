@@ -119,7 +119,10 @@ class AttentionLayer(GraphModule, Configurable):
     scores = scores * scores_mask + ((1.0 - scores_mask) * tf.float32.min)
 
     # Normalize the scores
-    scores_normalized = tf.nn.softmax(scores, name="scores_normalized")
+    # scores_normalized = tf.nn.softmax(scores, name="scores_normalized")
+    scores_exp = tf.exp(scores)
+    scores_sum = tf.reduce_sum(tf.exp(scores), axis=0)
+    scores_normalized = tf.truediv(scores_exp, scores_sum, name="scores_normalized")
 
     # Calculate the weighted average of the attention inputs
     # according to the scores

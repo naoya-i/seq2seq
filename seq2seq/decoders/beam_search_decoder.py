@@ -119,7 +119,7 @@ class BeamSearchDecoder(RNNDecoder):
     beam_state = beam_search.create_initial_beam_state(config=self.config)
     return finished, first_inputs, (initial_state, beam_state)
 
-  def finalize(self, outputs, final_state):
+  def finalize(self, outputs, final_state, final_sequence_lengths):
     # Gather according to beam search result
     predicted_ids = beam_search.gather_tree(outputs.predicted_ids,
                                             outputs.beam_parent_ids)

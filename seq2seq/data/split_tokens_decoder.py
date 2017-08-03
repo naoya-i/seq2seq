@@ -63,6 +63,7 @@ class SplitTokensDecoder(data_decoder.DataDecoder):
 
     decoded_items[self.length_feature_name] = tf.size(tokens)
     decoded_items[self.tokens_feature_name] = tokens
+
     return [decoded_items[_] for _ in items]
 
   def list_items(self):

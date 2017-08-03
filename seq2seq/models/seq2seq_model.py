@@ -60,6 +60,7 @@ class Seq2SeqModel(ModelBase):
         "inference.beam_search.beam_width": 0,
         "inference.beam_search.length_penalty_weight": 0.0,
         "inference.beam_search.choose_successors_fn": "choose_top_k",
+        "inference.use_target_ids": False,
         "optimizer.clip_embed_gradients": 0.1,
         "vocab_source": "",
         "vocab_target": "",

@@ -71,6 +71,7 @@ class AttentionDecoder(RNNDecoder):
                attention_values_length,
                attention_fn,
                reverse_scores_lengths=None,
+               target_ids=None,
                name="attention_decoder"):
     super(AttentionDecoder, self).__init__(params, mode, name)
     self.vocab_size = vocab_size
@@ -79,6 +80,7 @@ class AttentionDecoder(RNNDecoder):
     self.attention_values_length = attention_values_length
     self.attention_fn = attention_fn
     self.reverse_scores_lengths = reverse_scores_lengths
+    self.target_ids = target_ids
 
   @property
   def output_size(self):
@@ -175,6 +177,10 @@ class AttentionDecoder(RNNDecoder):
 
     sample_ids = self.helper.sample(
         time=time_, outputs=logits, state=cell_state)
+
+    if self.target_ids != None:
+      # sample_ids: int32[BATCH_SIZE]
+      sample_ids = tf.to_int32(tf.transpose(self.target_ids)[1+time_])
 
     outputs = AttentionDecoderOutput(
         logits=logits,

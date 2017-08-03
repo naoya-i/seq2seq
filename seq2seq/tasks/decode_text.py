@@ -112,6 +112,7 @@ class DecodeText(InferenceTask):
     super(DecodeText, self).__init__(params)
     self._unk_mapping = None
     self._unk_replace_fn = None
+    self._with_prob = self.params["with_prob"]
 
     if self.params["unk_mapping"] is not None:
       self._unk_mapping = _get_unk_mapping(self.params["unk_mapping"])
@@ -134,6 +135,7 @@ class DecodeText(InferenceTask):
         "postproc_fn": "",
         "unk_replace": False,
         "unk_mapping": None,
+        "with_prob": False,
     })
     return params
 
@@ -146,6 +148,10 @@ class DecodeText(InferenceTask):
 
     if "attention_scores" in self._predictions:
       fetches["attention_scores"] = self._predictions["attention_scores"]
+
+    if self._with_prob:
+      fetches["logits"] = self._predictions["logits"]
+      fetches["predicted_ids"] = self._predictions["predicted_ids"]
 
     return tf.train.SessionRunArgs(fetches)
 
@@ -185,4 +191,22 @@ class DecodeText(InferenceTask):
 
       sent = sent.strip()
 
-      print(sent)
+      if self._with_prob:
+        # Normalize it.
+        #   fetches["logits"]: [# tokens, # vocab]
+        #   fetches["predicted_ids"]: [# tokens, 1]
+        ret = []
+
+        for i, vocab_idx, vocab_dist in zip(range(len(fetches["predicted_ids"])), fetches["predicted_ids"], fetches["logits"]):
+
+          e_x = np.exp(vocab_dist - np.max(vocab_dist))
+          e_x = e_x / e_x.sum(axis=0)
+          ret += [e_x[vocab_idx]]
+
+          if predicted_tokens[i] == "SEQUENCE_END":
+            break
+
+        print("{}\t{}".format(sent, np.prod(ret)))
+
+      else:
+        print(sent)

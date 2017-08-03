@@ -72,6 +72,10 @@ class AttentionSeq2Seq(BasicSeq2Seq):
             input=reverse_scores_lengths,
             multiples=[self.params["inference.beam_search.beam_width"]])
 
+    target_ids = None
+    if self.params["inference.use_target_ids"]:
+      target_ids = _labels["target_ids"]
+
     return self.decoder_class(
         params=self.params["decoder.params"],
         mode=self.mode,
@@ -80,4 +84,6 @@ class AttentionSeq2Seq(BasicSeq2Seq):
         attention_values_length=encoder_output.attention_values_length,
         attention_keys=encoder_output.outputs,
         attention_fn=attention_layer,
-        reverse_scores_lengths=reverse_scores_lengths)
+        reverse_scores_lengths=reverse_scores_lengths,
+        target_ids=target_ids,
+        )

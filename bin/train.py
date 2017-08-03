@@ -136,6 +136,12 @@ def create_experiment(output_dir):
   config.tf_config.gpu_options.allow_growth = FLAGS.gpu_allow_growth
   config.tf_config.log_device_placement = FLAGS.log_device_placement
 
+  #
+  # To cope with https://github.com/tensorflow/tensorflow/issues/9374 ...
+  gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=config.tf_config.gpu_options.per_process_gpu_memory_fraction, allow_growth=config.tf_config.gpu_options.allow_growth)
+  with tf.Session(config=tf.ConfigProto(gpu_options=gpu_options)) as sess:
+     pass
+
   train_options = training_utils.TrainOptions(
       model_class=FLAGS.model,
       model_params=FLAGS.model_params)

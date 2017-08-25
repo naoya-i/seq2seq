@@ -30,7 +30,9 @@ from tensorflow.contrib.seq2seq import CustomHelper
 class AttentionDecoderOutput(
     namedtuple("DecoderOutput", [
         "logits", "predicted_ids", "cell_output", "attention_scores",
-        "attention_context"
+        "attention_unscores",
+        "attention_context",
+        "copy_switch_prob",
     ])):
   """Augmented decoder output that also includes the attention scores.
   """
@@ -89,7 +91,10 @@ class AttentionDecoder(RNNDecoder):
         predicted_ids=tf.TensorShape([]),
         cell_output=self.cell.output_size,
         attention_scores=tf.shape(self.attention_values)[1:-1],
-        attention_context=self.attention_values.get_shape()[-1])
+        attention_unscores=tf.shape(self.attention_values)[1:-1],
+        attention_context=self.attention_values.get_shape()[-1],
+        copy_switch_prob=1,
+        )
 
   @property
   def output_dtype(self):
@@ -98,7 +103,10 @@ class AttentionDecoder(RNNDecoder):
         predicted_ids=tf.int32,
         cell_output=tf.float32,
         attention_scores=tf.float32,
-        attention_context=tf.float32)
+        attention_unscores=tf.float32,
+        attention_context=tf.float32,
+        copy_switch_prob=tf.float32,
+        )
 
   def initialize(self, name=None):
     finished, first_inputs = self.helper.initialize()
@@ -116,7 +124,7 @@ class AttentionDecoder(RNNDecoder):
     """Computes the decoder outputs."""
 
     # Compute attention
-    att_scores, attention_context = self.attention_fn(
+    att_scores, att_unnorm_scores, attention_context = self.attention_fn(
         query=cell_output,
         keys=self.attention_keys,
         values=self.attention_values,
@@ -140,7 +148,7 @@ class AttentionDecoder(RNNDecoder):
         activation_fn=None,
         scope="logits")
 
-    return softmax_input, logits, att_scores, attention_context
+    return softmax_input, logits, att_scores, att_unnorm_scores, attention_context
 
   def _setup(self, initial_state, helper):
     self.initial_state = initial_state
@@ -165,8 +173,15 @@ class AttentionDecoder(RNNDecoder):
 
   def step(self, time_, inputs, state, name=None):
     cell_output, cell_state = self.cell(inputs, state)
-    cell_output_new, logits, attention_scores, attention_context = \
+    cell_output_new, logits, attention_scores, attention_unscores, attention_context = \
       self.compute_output(cell_output)
+
+    copy_switch_prob = tf.nn.softmax(tf.contrib.layers.fully_connected(
+      inputs=tf.concat([cell_output, attention_context], 1),
+      num_outputs=2,
+      activation_fn=tf.nn.tanh,
+      scope="copyswitch_prob",
+    ))
 
     if self.reverse_scores_lengths is not None:
       attention_scores = tf.reverse_sequence(
@@ -187,7 +202,10 @@ class AttentionDecoder(RNNDecoder):
         predicted_ids=sample_ids,
         cell_output=cell_output_new,
         attention_scores=attention_scores,
-        attention_context=attention_context)
+        attention_unscores=attention_unscores,
+        attention_context=attention_context,
+        copy_switch_prob=copy_switch_prob,
+        )
 
     finished, next_inputs, next_state = self.helper.next_inputs(
         time=time_, outputs=outputs, state=cell_state, sample_ids=sample_ids)

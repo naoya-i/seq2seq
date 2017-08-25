@@ -24,6 +24,7 @@ from pydoc import locate
 
 import tensorflow as tf
 
+from seq2seq import losses as seq2seq_losses
 from seq2seq import decoders
 from seq2seq.models.basic_seq2seq import BasicSeq2Seq
 
@@ -41,6 +42,15 @@ class AttentionSeq2Seq(BasicSeq2Seq):
 
   def __init__(self, params, mode, name="att_seq2seq"):
     super(AttentionSeq2Seq, self).__init__(params, mode, name)
+
+  def _preprocess(self, features, labels):
+    features, labels = super(AttentionSeq2Seq, self)._preprocess(features, labels)
+
+    if None != labels and "target_copysv" in labels:
+        labels["target_copysv"] = labels["target_copysv"][:, :self.params[
+            "target.max_seq_len"]]
+
+    return features, labels
 
   @staticmethod
   def default_params():
@@ -87,3 +97,50 @@ class AttentionSeq2Seq(BasicSeq2Seq):
         reverse_scores_lengths=reverse_scores_lengths,
         target_ids=target_ids,
         )
+
+  def compute_loss(self, decoder_output, _features, labels):
+    """Computes the loss for this model.
+
+    Returns a tuple `(losses, loss)`, where `losses` are the per-batch
+    losses and loss is a single scalar tensor to minimize.
+    """
+    #pylint: disable=R0201
+    # Calculate loss per example-timestep of shape [B, T]
+    losses = seq2seq_losses.cross_entropy_sequence_loss(
+        logits=decoder_output.logits[:, :, :],
+        targets=tf.transpose(labels["target_ids"][:, 1:], [1, 0]),
+        sequence_length=labels["target_len"] - 1)
+
+    # Calculate the average log perplexity
+    loss = tf.reduce_sum(losses) / tf.to_float(
+        tf.reduce_sum(labels["target_len"] - 1))
+
+    if "target_copysv" in labels:
+        lmd = 0.7
+        targetsT = tf.transpose(labels["target_copysv"][:, 1:], [1, 0])
+
+        masked_logits = tf.boolean_mask(decoder_output.attention_unscores[:, :, :], tf.not_equal(targetsT, -1))
+        masked_copysv = tf.boolean_mask(targetsT, tf.not_equal(targetsT, -1))
+
+        losses_copy = tf.nn.sparse_softmax_cross_entropy_with_logits(
+             logits=masked_logits,
+             labels=masked_copysv,
+             )
+        losses_copysw = seq2seq_losses.cross_entropy_sequence_loss(
+             logits=decoder_output.copy_switch_prob[:, :, :],
+             targets=tf.to_int32(tf.not_equal(tf.transpose(labels["target_copysv"][:, 1:], [1, 0]), -1)),
+             sequence_length=labels["target_len"] - 1,
+             )
+
+        seq_loss = loss
+        tf.summary.scalar("seq_loss", loss)
+
+        copy_loss = tf.reduce_sum(losses_copy) / tf.to_float(tf.reduce_sum(labels["target_len"]))
+        copysw_loss = tf.reduce_sum(losses_copysw) / tf.to_float(tf.reduce_sum(labels["target_len"]))
+
+        tf.summary.scalar("copy_loss", copy_loss)
+        tf.summary.scalar("copysw_loss", copysw_loss)
+        loss = lmd*seq_loss + (1-lmd)*(copy_loss + copysw_loss)
+
+
+    return losses, loss

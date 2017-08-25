@@ -60,6 +60,13 @@ def main(_argv):
   """Program entry point.
   """
 
+  #
+  # To cope with https://github.com/tensorflow/tensorflow/issues/9374 ...
+  gpu_options = tf.GPUOptions(allow_growth=True)
+
+  with tf.Session(config=tf.ConfigProto(gpu_options=gpu_options)) as sess:
+     pass
+
   # Load flags from config file
   if FLAGS.config_path:
     with gfile.GFile(FLAGS.config_path) as config_file:

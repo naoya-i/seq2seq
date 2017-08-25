@@ -20,17 +20,21 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
+import numpy as np
 import tensorflow as tf
 from seq2seq.decoders.rnn_decoder import RNNDecoder, DecoderOutput
 
+import csv
+import json
 
 class BasicDecoder(RNNDecoder):
   """Simple RNN decoder that performed a softmax operations on the cell output.
   """
 
-  def __init__(self, params, mode, vocab_size, name="basic_decoder"):
+  def __init__(self, params, mode, vocab_size,         name="basic_decoder"):
     super(BasicDecoder, self).__init__(params, mode, name)
     self.vocab_size = vocab_size
+
 
   def compute_output(self, cell_output):
     """Computes the decoder outputs."""

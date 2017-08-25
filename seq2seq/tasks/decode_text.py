@@ -136,6 +136,7 @@ class DecodeText(InferenceTask):
         "unk_replace": False,
         "unk_mapping": None,
         "with_prob": False,
+        "top_k": 1,
     })
     return params
 
@@ -150,28 +151,21 @@ class DecodeText(InferenceTask):
       fetches["attention_scores"] = self._predictions["attention_scores"]
 
     if self._with_prob:
-      fetches["logits"] = self._predictions["logits"]
-      fetches["predicted_ids"] = self._predictions["predicted_ids"]
+      if "beam_search_output.log_probs" in self._predictions:
+        fetches["bso.log_probs"] = self._predictions["beam_search_output.log_probs"]
+        fetches["bso.beam_parent_ids"] = self._predictions["beam_search_output.beam_parent_ids"]
+        fetches["bso.predicted_ids"] = self._predictions["beam_search_output.predicted_ids"]
+        fetches["predicted_ids"] = self._predictions["predicted_ids"]
+
+      else:
+        fetches["logits"] = self._predictions["logits"]
+        fetches["predicted_ids"] = self._predictions["predicted_ids"]
 
     return tf.train.SessionRunArgs(fetches)
 
   def after_run(self, _run_context, run_values):
-    fetches_batch = run_values.results
-    for fetches in unbatch_dict(fetches_batch):
-      # Convert to unicode
-      fetches["predicted_tokens"] = np.char.decode(
-          fetches["predicted_tokens"].astype("S"), "utf-8")
-      predicted_tokens = fetches["predicted_tokens"]
 
-      # If we're using beam search we take the first beam
-      if np.ndim(predicted_tokens) > 1:
-        predicted_tokens = predicted_tokens[:, 0]
-
-      fetches["features.source_tokens"] = np.char.decode(
-          fetches["features.source_tokens"].astype("S"), "utf-8")
-      source_tokens = fetches["features.source_tokens"]
-      source_len = fetches["features.source_len"]
-
+    def _finalize(predicted_tokens):
       if self._unk_replace_fn is not None:
         # We slice the attention scores so that we do not
         # accidentially replace UNK with a SEQUENCE_END token
@@ -189,24 +183,56 @@ class DecodeText(InferenceTask):
       if self._postproc_fn:
         sent = self._postproc_fn(sent)
 
-      sent = sent.strip()
+      return sent.strip()
 
-      if self._with_prob:
-        # Normalize it.
-        #   fetches["logits"]: [# tokens, # vocab]
-        #   fetches["predicted_ids"]: [# tokens, 1]
-        ret = []
+    fetches_batch = run_values.results
 
-        for i, vocab_idx, vocab_dist in zip(range(len(fetches["predicted_ids"])), fetches["predicted_ids"], fetches["logits"]):
+    for fetches in unbatch_dict(fetches_batch):
+      # Convert to unicode
+      fetches["predicted_tokens"] = np.char.decode(
+          fetches["predicted_tokens"].astype("S"), "utf-8")
+      predicted_tokens = fetches["predicted_tokens"]
 
-          e_x = np.exp(vocab_dist - np.max(vocab_dist))
-          e_x = e_x / e_x.sum(axis=0)
-          ret += [e_x[vocab_idx]]
+      # If we're using beam search we take the first beam
+      if np.ndim(predicted_tokens) > 1:
+        predicted_tokens = predicted_tokens[:, 0]
 
-          if predicted_tokens[i] == "SEQUENCE_END":
-            break
+      fetches["features.source_tokens"] = np.char.decode(
+          fetches["features.source_tokens"].astype("S"), "utf-8")
+      source_tokens = fetches["features.source_tokens"]
+      source_len = fetches["features.source_len"]
 
-        print("{}\t{}".format(sent, np.prod(ret)))
+      sent = _finalize(predicted_tokens)
+
+      # For Beam Search.
+      if "bso.log_probs" in fetches:
+          # fetches["bso.log_probs"]: [# tokens, beam width]
+          sents = []
+
+          for i in range(self.params["top_k"]):
+              sent = _finalize(fetches["predicted_tokens"][:,i])
+
+              sents += ["{}\t{}".format(sent, np.exp(fetches["bso.log_probs"][-1][i]))]
+
+          print("\t".join(sents))
 
       else:
-        print(sent)
+          if self._with_prob:
+            # Normalize it.
+            #   fetches["logits"]: [# tokens, # vocab]
+            #   fetches["predicted_ids"]: [# tokens, 1]
+            ret = []
+
+            for i, vocab_idx, vocab_dist in zip(range(len(fetches["predicted_ids"])), fetches["predicted_ids"], fetches["logits"]):
+
+              e_x = np.exp(vocab_dist - np.max(vocab_dist))
+              e_x = e_x / e_x.sum(axis=0)
+              ret += [e_x[vocab_idx]]
+
+              if predicted_tokens[i] == "SEQUENCE_END":
+                break
+
+            print("{}\t{}".format(sent, np.prod(ret)))
+
+          else:
+            print(sent)

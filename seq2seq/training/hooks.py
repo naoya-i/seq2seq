@@ -194,11 +194,12 @@ class TrainSampleHook(TrainingHook):
 
       if self.params["copy_switch"]:
         fetches["source_tokens"] = self._pred_dict["features.source_tokens"]
-        fetches["copy_switch"] = self._pred_dict["copy_switch"]
-        fetches["copy_switch_prob"] = self._pred_dict["copy_switch_prob"]
-        fetches["target_copysv"] = self._pred_dict["labels.target_copysv"]
-        fetches["location_ids"] = self._pred_dict["location_ids"]
+        # fetches["copy_switch"] = self._pred_dict["copy_switch"]
+        # fetches["copy_switch_prob"] = self._pred_dict["copy_switch_prob"]
+        # fetches["target_copysv"] = self._pred_dict["labels.target_copysv"]
+        # fetches["location_ids"] = self._pred_dict["location_ids"]
         fetches["attention_scores"] = self._pred_dict["attention_scores"]
+        fetches["attention_unscores"] = self._pred_dict["attention_unscores"]
 
       return tf.train.SessionRunArgs([fetches, self._global_step])
     return tf.train.SessionRunArgs([{}, self._global_step])
@@ -219,8 +220,7 @@ class TrainSampleHook(TrainingHook):
     result_str = ""
     result_str += "Prediction followed by Target @ Step {}\n".format(step)
     result_str += ("=" * 100) + "\n"
-    result_str += "{}, {}".format(len(result_dict["attention_scores"]), len(result_dict["source_tokens"])) + "\n\n"
-    
+
     for result in result_dicts:
       target_len = result["target_len"]
       predicted_slice = result["predicted_tokens"][:target_len - 1]
@@ -228,10 +228,11 @@ class TrainSampleHook(TrainingHook):
       result_str += self._target_delimiter.encode("utf-8").join(
           predicted_slice).decode("utf-8") + "\n"
       if self.params["copy_switch"]:
-        result_str += " ".join(map(lambda x: "{}".format(x), result["copy_switch"][:target_len - 1])) + "\n"
-        result_str += "FAA{}FAA".format(result["copy_switch_prob"][:target_len - 1]) + "\n"
-        result_str += " ".join(map(lambda x: "{}".format(x), result["location_ids"][:target_len - 1])) + "\n"
-        result_str += " ".join(map(lambda x: "{}".format(x), result["target_copysv"][:target_len - 1])) + "\n"
+        # result_str += " ".join(map(lambda x: "{}".format(x), result["copy_switch"][:target_len - 1])) + "\n"
+        # result_str += "FAA{}FAA".format(result["copy_switch_prob"][:target_len - 1]) + "\n"
+        # result_str += " ".join(map(lambda x: "{}".format(x), result["location_ids"][:target_len - 1])) + "\n"
+        # result_str += " ".join(map(lambda x: "{}".format(x), result["target_copysv"][:target_len - 1])) + "\n"
+        result_str += "FAA{}FAA".format(result["attention_unscores"][:target_len - 1]) + "\n"
         result_str += "FAA{}FAA".format(result["attention_scores"][:target_len - 1]) + "\n"
         # result_str += result["source_tokens"] + "\n"
       result_str += self._target_delimiter.encode("utf-8").join(

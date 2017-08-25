@@ -116,13 +116,13 @@ class AttentionLayer(GraphModule, Configurable):
         lengths=tf.to_int32(values_length),
         maxlen=tf.to_int32(num_scores),
         dtype=tf.float32)
-    scores = scores * scores_mask + ((1.0 - scores_mask) * tf.float32.min)
+    scores = scores * scores_mask # + ((1.0 - scores_mask) * tf.float32.min)
 
     # Normalize the scores
-    # scores_normalized = tf.nn.softmax(scores, name="scores_normalized")
-    scores_exp = tf.exp(scores)
-    scores_sum = tf.reduce_sum(tf.exp(scores), axis=0)
-    scores_normalized = tf.truediv(scores_exp, scores_sum, name="scores_normalized")
+    scores_normalized = tf.nn.softmax(scores, name="scores_normalized")
+    # scores_exp = tf.exp(scores)
+    # scores_sum = tf.reduce_sum(tf.exp(scores), axis=0)
+    # scores_normalized = tf.truediv(scores_exp, scores_sum, name="scores_normalized")
 
     # Calculate the weighted average of the attention inputs
     # according to the scores
@@ -131,7 +131,7 @@ class AttentionLayer(GraphModule, Configurable):
     context.set_shape([None, values_depth])
 
 
-    return (scores_normalized, context)
+    return (scores_normalized, scores, context)
 
 
 class AttentionLayerDot(AttentionLayer):

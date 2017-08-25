@@ -75,7 +75,8 @@ class BasicSeq2Seq(Seq2SeqModel):
     return self.decoder_class(
         params=self.params["decoder.params"],
         mode=self.mode,
-        vocab_size=self.target_vocab_info.total_size)
+        vocab_size=self.target_vocab_info.total_size,
+        )
 
   def _decode_train(self, decoder, bridge, _encoder_output, _features, labels):
     """Runs decoding in training mode"""

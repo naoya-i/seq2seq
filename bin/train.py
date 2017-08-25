@@ -209,7 +209,7 @@ def create_experiment(output_dir):
     metric = _create_from_dict(dict_, metric_specs)
     eval_metrics[metric.name] = metric
 
-  experiment = PatchedExperiment(
+  experiment = tf.contrib.learn.Experiment( # PatchedExperiment(
       estimator=estimator,
       train_input_fn=train_input_fn,
       eval_input_fn=eval_input_fn,

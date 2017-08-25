@@ -20,8 +20,10 @@ from __future__ import unicode_literals
 
 import collections
 
+import numpy as np
 import tensorflow as tf
 
+from tensorflow import gfile
 from seq2seq import graph_utils
 from seq2seq import losses as seq2seq_losses
 from tensorflow.contrib.seq2seq.python.ops.helper import _transpose_batch_time
@@ -47,6 +49,22 @@ class Seq2SeqModel(ModelBase):
     if "vocab_target" in self.params and self.params["vocab_target"]:
       self.target_vocab_info = vocab.get_vocab_info(self.params["vocab_target"])
 
+    self.source_emb_init = tf.random_uniform_initializer(
+        -self.params["embedding.init_scale"],
+        self.params["embedding.init_scale"])
+    self.target_emb_init = tf.random_uniform_initializer(
+      -self.params["embedding.init_scale"],
+      self.params["embedding.init_scale"])
+
+    if self.mode == tf.contrib.learn.ModeKeys.TRAIN:
+        if self.params["embedding.pretrained.source"] != "":
+          self.source_emb_init = self._load_pretrained_emb(self.params["vocab_source"], self.params["embedding.pretrained.source"], self.params["embedding.pretrained_vocab.source"])
+
+        if not self.params["embedding.share"]:
+          if self.params["embedding.pretrained.target"] != "":
+            self.target_emb_init = self._load_pretrained_emb(self.params["vocab_target"], self.params["embedding.pretrained.target"], self.params["embedding.pretrained_vocab.target"])
+
+
   @staticmethod
   def default_params():
     params = ModelBase.default_params()
@@ -57,6 +75,11 @@ class Seq2SeqModel(ModelBase):
         "embedding.dim": 100,
         "embedding.init_scale": 0.04,
         "embedding.share": False,
+        "embedding.trainable": True,
+        "embedding.pretrained.source": "",
+        "embedding.pretrained.target": "",
+        "embedding.pretrained_vocab.source": "",
+        "embedding.pretrained_vocab.target": "",
         "inference.beam_search.beam_width": 0,
         "inference.beam_search.length_penalty_weight": 0.0,
         "inference.beam_search.choose_successors_fn": "choose_top_k",
@@ -67,21 +90,55 @@ class Seq2SeqModel(ModelBase):
     })
     return params
 
-  def _clip_gradients(self, grads_and_vars):
-    """In addition to standard gradient clipping, also clips embedding
-    gradients to a specified value."""
-    grads_and_vars = super(Seq2SeqModel, self)._clip_gradients(grads_and_vars)
 
-    clipped_gradients = []
-    variables = []
-    for gradient, variable in grads_and_vars:
-      if "embedding" in variable.name:
-        tmp = tf.clip_by_norm(
-            gradient.values, self.params["optimizer.clip_embed_gradients"])
-        gradient = tf.IndexedSlices(tmp, gradient.indices, gradient.dense_shape)
-      clipped_gradients.append(gradient)
-      variables.append(variable)
-    return list(zip(clipped_gradients, variables))
+  def _load_pretrained_emb(self, vocab_path, emb_path, emb_vocab_path):
+
+    # Loading pre-trained embeddings
+    with gfile.GFile(vocab_path) as file:
+      vocab = list(line.split("\t")[0] for line in file)
+
+    vocab_map = {}
+
+    for i, w in enumerate(vocab):
+      vocab_map[w] = i
+
+    # Loading vectors
+    tf.logging.info("Loading pretrained embeddings from {}...".format(emb_path))
+
+    npemb = np.load(open(emb_path, "rb"))
+    npemb_vocab = open(emb_vocab_path).read().splitlines()
+
+    embeddings = list(2.0*(np.random.random(self.params["embedding.dim"])-0.5)*self.params["embedding.init_scale"] for i in range(len(vocab)+3))
+    load_count = 0
+
+    with gfile.GFile(emb_vocab_path) as file:
+      for word, vec in zip(file, npemb):
+        word = word.strip()
+
+        if word in vocab_map:
+          load_count += 1
+          embeddings[vocab_map[word]] = vec
+
+    tf.logging.info("Loaded {} pretrained vectors (vocab: {}) from {}".format(load_count, len(vocab_map), emb_path))
+
+    return tf.constant_initializer(np.array(embeddings, dtype=np.float32), verify_shape=True)
+
+
+  # def _clip_gradients(self, grads_and_vars):
+  #   """In addition to standard gradient clipping, also clips embedding
+  #   gradients to a specified value."""
+  #   grads_and_vars = super(Seq2SeqModel, self)._clip_gradients(grads_and_vars)
+  #
+  #   clipped_gradients = []
+  #   variables = []
+  #   for gradient, variable in grads_and_vars:
+  #     if "embedding" in variable.name:
+  #       tmp = tf.clip_by_norm(
+  #           gradient.values, self.params["optimizer.clip_embed_gradients"])
+  #       gradient = tf.IndexedSlices(tmp, gradient.indices, gradient.dense_shape)
+  #     clipped_gradients.append(gradient)
+  #     variables.append(variable)
+  #   return list(zip(clipped_gradients, variables))
 
   def _create_predictions(self, decoder_output, features, labels, losses=None):
     """Creates the dictionary of predictions that is returned by the model.
@@ -132,9 +189,8 @@ class Seq2SeqModel(ModelBase):
     return tf.get_variable(
         name="W",
         shape=[self.source_vocab_info.total_size, self.params["embedding.dim"]],
-        initializer=tf.random_uniform_initializer(
-            -self.params["embedding.init_scale"],
-            self.params["embedding.init_scale"]))
+        initializer=self.source_emb_init,
+        trainable=self.params["embedding.trainable"])
 
   @property
   @templatemethod("target_embedding")
@@ -146,9 +202,8 @@ class Seq2SeqModel(ModelBase):
     return tf.get_variable(
         name="W",
         shape=[self.target_vocab_info.total_size, self.params["embedding.dim"]],
-        initializer=tf.random_uniform_initializer(
-            -self.params["embedding.init_scale"],
-            self.params["embedding.init_scale"]))
+        initializer=self.target_emb_init,
+        trainable=self.params["embedding.trainable"])
 
   @templatemethod("encode")
   def encode(self, features, labels):

@@ -122,7 +122,7 @@ class BeamSearchDecoder(RNNDecoder):
   def finalize(self, outputs, final_state, final_sequence_lengths):
     # Gather according to beam search result
     predicted_ids = beam_search.gather_tree(outputs.predicted_ids,
-                                            outputs.beam_parent_ids)
+                            outputs.beam_parent_ids)
 
     # We're using a batch size of 1, so we add an extra dimension to
     # convert tensors to [1, beam_width, ...] shape. This way Tensorflow

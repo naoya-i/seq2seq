@@ -121,6 +121,7 @@ class Seq2SeqModel(ModelBase):
 
     tf.logging.info("Loaded {} pretrained vectors (vocab: {}) from {}".format(load_count, len(vocab_map), emb_path))
 
+    embeddings = embeddings / np.linalg.norm(embeddings, axis=1).reshape((-1, 1))
     return tf.constant_initializer(np.array(embeddings, dtype=np.float32), verify_shape=True)
 
 
